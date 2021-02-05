@@ -63,3 +63,28 @@ def multi_classes_nms(cls_scores, box_preds, nms_config, score_thresh=None):
     pred_boxes = torch.cat(pred_boxes, dim=0)
 
     return pred_scores, pred_labels, pred_boxes
+
+
+def fast_bev_nms(box_scores, box_preds, nms_config, score_thresh=None):
+    src_box_scores = box_scores
+    if score_thresh is not None:
+        scores_mask = (box_scores >= score_thresh)
+        box_scores = box_scores[scores_mask]
+        box_preds = box_preds[scores_mask]
+
+    selected = []
+    if box_scores.shape[0] > 0:
+        box_scores_nms, indices = torch.topk(box_scores, k=min(nms_config.NMS_PRE_MAXSIZE, box_scores.shape[0]))
+        boxes_for_nms = box_preds[indices]
+        bev_iou = iou3d_nms_utils.boxes_iou_bev(boxes_for_nms, boxes_for_nms)
+        bev_iou.triu_(diagonal=1)
+        iou_max, _ = torch.max(bev_iou, dim=0)
+        selected = indices[iou_max <= nms_config.NMS_THRESH]
+        selected = selected[:nms_config.NMS_POST_MAXSIZE]
+        # import pdb
+        # pdb.set_trace()
+
+    if score_thresh is not None:
+        original_idxs = scores_mask.nonzero(as_tuple=False)[:, 0].view(-1)
+        selected = original_idxs[selected]
+    return selected, src_box_scores[selected]

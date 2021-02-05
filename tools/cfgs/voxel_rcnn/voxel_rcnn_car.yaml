@@ -108,7 +108,9 @@ MODEL:
             TEST:
                 NMS_TYPE: nms_gpu
                 MULTI_CLASSES_NMS: False
-                NMS_PRE_MAXSIZE: 4096
+                USE_FAST_NMS: True
+                SCORE_THRESH: 0.0
+                NMS_PRE_MAXSIZE: 2048
                 NMS_POST_MAXSIZE: 100
                 NMS_THRESH: 0.7
 
@@ -119,8 +121,8 @@ MODEL:
             POOL_LAYERS:
                 x_conv3:
                     MLPS: [[32, 32], [32, 32]]
-                    QUERY_RANGES: [[3, 3, 3], [6, 6, 6]]
-                    POOL_RADIUS: [0.6, 1.2]
+                    QUERY_RANGES: [[2, 2, 2], [4, 4, 4]]
+                    POOL_RADIUS: [0.4, 0.8]
                     NSAMPLE: [16, 16]
                     POOL_METHOD: max_pool
                 x_conv4:

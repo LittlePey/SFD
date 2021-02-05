@@ -36,11 +36,15 @@ This is the official implementation of [**Voxel R-CNN: Towards High Performance 
     ├── pcdet
     ├── tools
     ```
+    Generate the data infos by running the following command:
+    ```
+    python -m pcdet.datasets.kitti.kitti_dataset create_kitti_infos tools/cfgs/dataset_configs/kitti_dataset.yaml
+    ```
 
 3. Setup.
 
     ```
-    python setup.py build develop
+    python setup.py develop
     ```
 
 ### Getting Started

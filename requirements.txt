@@ -1,8 +1,0 @@
-numpy
-torch>=1.1
-numba
-tensorboardX
-easydict
-pyyaml
-scikit-image
-tqdm

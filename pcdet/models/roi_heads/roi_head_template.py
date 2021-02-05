@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ...utils import box_coder_utils, common_utils, loss_utils
-from ..model_utils.model_nms_utils import class_agnostic_nms
+from ..model_utils.model_nms_utils import class_agnostic_nms, fast_bev_nms
 from .target_assigner.proposal_target_layer import ProposalTargetLayer
 
 
@@ -63,7 +63,7 @@ class RoIHeadTemplate(nn.Module):
         """
         batch_size = batch_dict['batch_size']
         batch_box_preds = batch_dict['batch_box_preds']
-        batch_cls_preds = batch_dict['batch_cls_preds']
+        batch_cls_preds = torch.sigmoid(batch_dict['batch_cls_preds'])
         rois = batch_box_preds.new_zeros((batch_size, nms_config.NMS_POST_MAXSIZE, batch_box_preds.shape[-1]))
         roi_scores = batch_box_preds.new_zeros((batch_size, nms_config.NMS_POST_MAXSIZE))
         roi_labels = batch_box_preds.new_zeros((batch_size, nms_config.NMS_POST_MAXSIZE), dtype=torch.long)
@@ -83,9 +83,22 @@ class RoIHeadTemplate(nn.Module):
             if nms_config.MULTI_CLASSES_NMS:
                 raise NotImplementedError
             else:
-                selected, selected_scores = class_agnostic_nms(
-                    box_scores=cur_roi_scores, box_preds=box_preds, nms_config=nms_config
-                )
+                if self.training:
+                    selected, selected_scores = class_agnostic_nms(
+                        box_scores=cur_roi_scores, box_preds=box_preds, nms_config=nms_config
+                    )
+                else:
+                    if nms_config.get("USE_FAST_NMS", False):
+                        selected, selected_scores = fast_bev_nms(
+                            box_scores=cur_roi_scores, box_preds=box_preds, nms_config=nms_config, score_thresh=nms_config.SCORE_THRESH
+                        )
+                    else:
+                        selected, selected_scores = class_agnostic_nms(
+                            box_scores=cur_roi_scores, box_preds=box_preds, nms_config=nms_config
+                        )
+                # selected, selected_scores = class_agnostic_nms(
+                #     box_scores=cur_roi_scores, box_preds=box_preds, nms_config=nms_config
+                # )
 
             rois[index, :len(selected), :] = box_preds[selected]
             roi_scores[index, :len(selected)] = cur_roi_scores[selected]
@@ -189,36 +202,6 @@ class RoIHeadTemplate(nn.Module):
 
                 rcnn_loss_reg += loss_corner
                 tb_dict['rcnn_loss_corner'] = loss_corner.item()
-
-            if loss_cfgs.GRID_3D_IOU_LOSS and fg_sum > 0:
-                fg_rcnn_reg = rcnn_reg.view(rcnn_batch_size, -1)[fg_mask]
-                fg_roi_boxes3d = roi_boxes3d.view(-1, code_size)[fg_mask]
-
-                fg_roi_boxes3d = fg_roi_boxes3d.view(1, -1, code_size)
-                batch_anchors = fg_roi_boxes3d.clone().detach()
-                roi_ry = fg_roi_boxes3d[:, :, 6].view(-1)
-                roi_xyz = fg_roi_boxes3d[:, :, 0:3].view(-1, 3)
-                batch_anchors[:, :, 0:3] = 0
-                rcnn_boxes3d = self.box_coder.decode_torch(
-                    fg_rcnn_reg.view(batch_anchors.shape[0], -1, code_size), batch_anchors
-                ).view(-1, code_size)
-
-                rcnn_boxes3d = common_utils.rotate_points_along_z(
-                    rcnn_boxes3d.unsqueeze(dim=1), roi_ry
-                ).squeeze(dim=1)
-                rcnn_boxes3d[:, 0:3] += roi_xyz
-
-                loss_iou3d = loss_utils.get_gridify_iou3d_loss(
-                    gt_of_rois_src[fg_mask][:, :7],
-                    rcnn_boxes3d[:, :7]
-                    
-                )
-
-                loss_iou3d = loss_iou3d.mean()
-                loss_iou3d = loss_iou3d * loss_cfgs.LOSS_WEIGHTS['rcnn_iou3d_weight']
-
-                rcnn_loss_reg += loss_iou3d
-                tb_dict['rcnn_loss_iou3d'] = loss_iou3d.item()
         else:
             raise NotImplementedError
 
