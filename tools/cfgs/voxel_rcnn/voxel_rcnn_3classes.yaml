@@ -1,4 +1,4 @@
-CLASS_NAMES: ['Car']
+CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
 
 DATA_CONFIG:
     _BASE_CONFIG_: cfgs/dataset_configs/kitti_dataset.yaml
@@ -45,7 +45,7 @@ MODEL:
     BACKBONE_2D:
         NAME: BaseBEVBackbone
 
-        LAYER_NUMS: [5, 5]
+        LAYER_NUMS: [4, 4]
         LAYER_STRIDES: [1, 2]
         NUM_FILTERS: [64, 128]
         UPSAMPLE_STRIDES: [1, 2]
