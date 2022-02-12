@@ -1,7 +1,7 @@
 # Voxel R-CNN
 <p align="center"> <img src='docs/voxel_rcnn_framework.jpg' align="center" height="270px"> </p>
 
-**Important Update:** [`OpenPCDet`](https://github.com/open-mmlab/OpenPCDet) is also an official implementation of Voxel R-CNN. Please refer to this repository to find the configs for Waymo Open Dataset.
+**Important Update:** The code of Voxel R-CNN in [`OpenPCDet`](https://github.com/open-mmlab/OpenPCDet) is also an official implementation one. Please refer to this repository to find the configs for Waymo Open Dataset.
 
 This is the official implementation of [**Voxel R-CNN: Towards High Performance Voxel-based 3D Object Detection**](https://arxiv.org/abs/2012.15712), built on [`OpenPCDet`](https://github.com/open-mmlab/OpenPCDet).
 
