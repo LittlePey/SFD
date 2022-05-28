@@ -1,5 +1,5 @@
 # Sparse Fuse Dense: Towards High Quality 3D Detection with Depth Completion (CVPR 2022, Oral)
-<p align="center"> <img src='docs/sfd_framework.png' align="center" height="320px"> </p>
+<p align="center"> <img src='docs/sfd_framework.png' align="center" height="300px"> </p>
 
 This is the official implementation of [**Sparse Fuse Dense: Towards High Quality 3D Detection with Depth Completion**](https://arxiv.org/abs/2012.15712), built on [`Voxel-R-CNN`](https://github.com/djiajunustc/Voxel-R-CNN) and [`OpenPCDet`](https://github.com/open-mmlab/OpenPCDet)
 
