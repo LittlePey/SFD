@@ -3,7 +3,7 @@ from functools import partial
 import numpy as np
 
 from ...utils import common_utils
-from . import augmentor_utils, database_sampler
+from . import augmentor_utils, database_sampler, augmentor_utils_sfd, database_sampler_sfd
 
 
 class DataAugmentor(object):
@@ -78,6 +78,67 @@ class DataAugmentor(object):
         data_dict['points'] = points
         return data_dict
 
+    def gt_sampling_sfd(self, config=None):
+        db_sampler = database_sampler_sfd.DataBaseSamplerSFD(
+            root_path=self.root_path,
+            sampler_cfg=config,
+            class_names=self.class_names,
+            logger=self.logger
+        )
+        return db_sampler
+
+    def random_world_flip_sfd(self, data_dict=None, config=None):
+        if data_dict is None:
+            return partial(self.random_world_flip_sfd, config=config)
+        gt_boxes, points, points_pseudo = data_dict['gt_boxes'], data_dict['points'], data_dict['points_pseudo']
+        for cur_axis in config['ALONG_AXIS_LIST']:
+            assert cur_axis in ['x', 'y']
+            gt_boxes, points, points_pseudo = getattr(augmentor_utils_sfd, 'random_flip_along_%s' % cur_axis)(
+                gt_boxes, points, points_pseudo
+            )
+
+        data_dict['gt_boxes'] = gt_boxes
+        data_dict['points'] = points
+        data_dict['points_pseudo'] = points_pseudo
+        return data_dict
+
+    def random_world_rotation_sfd(self, data_dict=None, config=None):
+        if data_dict is None:
+            return partial(self.random_world_rotation_sfd, config=config)
+        rot_range = config['WORLD_ROT_ANGLE']
+        if not isinstance(rot_range, list):
+            rot_range = [-rot_range, rot_range]
+        gt_boxes, points, points_pseudo = augmentor_utils_sfd.global_rotation(
+            data_dict['gt_boxes'], data_dict['points'], data_dict['points_pseudo'], rot_range=rot_range
+        )
+
+        data_dict['gt_boxes'] = gt_boxes
+        data_dict['points'] = points
+        data_dict['points_pseudo'] = points_pseudo
+        return data_dict
+
+    def random_world_scaling_sfd(self, data_dict=None, config=None):
+        if data_dict is None:
+            return partial(self.random_world_scaling_sfd, config=config)
+        gt_boxes, points, points_pseudo = augmentor_utils_sfd.global_scaling(
+            data_dict['gt_boxes'], data_dict['points'], data_dict['points_pseudo'], config['WORLD_SCALE_RANGE']
+        )
+        data_dict['gt_boxes'] = gt_boxes
+        data_dict['points'] = points
+        data_dict['points_pseudo'] = points_pseudo
+        return data_dict
+
+    def random_local_noise_sfd(self, data_dict=None, config=None):
+        if data_dict is None:
+            return partial(self.random_local_noise_sfd, config=config)
+        data_dict['gt_boxes'][:, 6] = -data_dict['gt_boxes'][:, 6]
+        augmentor_utils_sfd.noise_per_object_v3_(data_dict['gt_boxes'], data_dict['points'], data_dict['points_pseudo'], 
+                                        data_dict.get('valid_noise', None),  
+                                        config['LOCAL_ROT_RANGE'], config['TRANSLATION_STD'], 
+                                        config['GLOBAL_ROT_RANGE'], config['EXTRA_WIDTH'])
+        data_dict['gt_boxes'][:, 6] = -data_dict['gt_boxes'][:, 6]
+        return data_dict
+        
     def forward(self, data_dict):
         """
         Args:

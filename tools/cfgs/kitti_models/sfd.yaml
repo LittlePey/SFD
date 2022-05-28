@@ -1,0 +1,273 @@
+CLASS_NAMES: ['Car']
+
+DATA_CONFIG:
+    _BASE_CONFIG_: cfgs/dataset_configs/kitti_dataset.yaml
+    DATASET: 'KittiDatasetSFD'
+    DATA_PATH: '../data/kitti_sfd_seguv_twise'
+    USE_VAN: True
+    DATA_AUGMENTOR:
+        DISABLE_AUG_LIST: ['placeholder']
+        AUG_CONFIG_LIST:
+            - NAME: gt_sampling_sfd
+              USE_ROAD_PLANE: True
+              DB_INFO_PATH:
+                  - kitti_dbinfos_train_sfd_seguv.pkl
+              PREPARE: {
+                 filter_by_min_points: ['Car:5'],
+                 filter_by_difficulty: [-1],
+              }
+
+              SAMPLE_GROUPS: ['Car:15']
+              NUM_POINT_FEATURES: 4
+              NUM_POINT_FEATURES_PSEUDO: 9
+              DATABASE_WITH_FAKELIDAR: False
+              REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]
+              LIMIT_WHOLE_SCENE: False
+
+            - NAME: random_local_noise_sfd
+              LOCAL_ROT_RANGE: [-0.78539816, 0.78539816]
+              TRANSLATION_STD: [1.0, 1.0, 0.5]
+              GLOBAL_ROT_RANGE: [0.0, 0.0]
+              EXTRA_WIDTH: [0.2, 0.2, 0.0]
+
+            - NAME: random_world_flip_sfd
+              ALONG_AXIS_LIST: ['x']
+
+            - NAME: random_world_rotation_sfd
+              WORLD_ROT_ANGLE: [-0.78539816, 0.78539816]
+
+            - NAME: random_world_scaling_sfd
+              WORLD_SCALE_RANGE: [0.95, 1.05]
+
+    POINT_FEATURE_ENCODING: {
+        encoding_type: absolute_coordinates_encoding,
+        used_feature_list: ['x', 'y', 'z', 'intensity'],
+        src_feature_list: ['x', 'y', 'z', 'intensity'],
+
+        encoding_type_pseudo: absolute_coordinates_encoding_pseudo,
+        used_feature_list_pseudo: ['x', 'y', 'z', 'r', 'g', 'b','u','v'],
+        src_feature_list_pseudo: ['x', 'y', 'z', 'r', 'g', 'b', 'mask', 'u','v'],
+    }
+
+    DATA_PROCESSOR:
+        - NAME: mask_points_and_boxes_outside_range_sfd
+          REMOVE_OUTSIDE_BOXES: True
+
+        - NAME: shuffle_points_sfd
+          SHUFFLE_ENABLED: {
+            'train': True,
+            'test': False
+          }
+
+        - NAME: transform_points_to_voxels_valid
+          VOXEL_SIZE: [0.05, 0.05, 0.1]
+          MAX_POINTS_PER_VOXEL: 5
+          MAX_NUMBER_OF_VOXELS: {
+            'train': 16000,
+            'test': 40000
+          }
+
+        - NAME: grid_sample_points_pseudo
+          MAX_DISTANCE: 13
+MODEL:
+    NAME: SFD
+
+    VFE:
+        NAME: MeanVFE
+
+    BACKBONE_3D:
+        NAME: VoxelBackBone8x
+
+    MAP_TO_BEV:
+        NAME: HeightCompression
+        NUM_BEV_FEATURES: 256
+
+    BACKBONE_2D:
+        NAME: BaseBEVBackbone
+
+        LAYER_NUMS: [4, 4]
+        LAYER_STRIDES: [1, 2]
+        NUM_FILTERS: [64, 128]
+        UPSAMPLE_STRIDES: [1, 2]
+        NUM_UPSAMPLE_FILTERS: [128, 128]
+
+    DENSE_HEAD:
+        NAME: AnchorHeadSingle
+        CLASS_AGNOSTIC: False
+
+        USE_DIRECTION_CLASSIFIER: True
+        DIR_OFFSET: 0.78539
+        DIR_LIMIT_OFFSET: 0.0
+        NUM_DIR_BINS: 2
+
+        ANCHOR_GENERATOR_CONFIG: [
+            {
+                'class_name': 'Car',
+                'anchor_sizes': [[3.9, 1.6, 1.56]],
+                'anchor_rotations': [0, 1.57],
+                'anchor_bottom_heights': [-1.78],
+                'align_center': False,
+                'feature_map_stride': 8,
+                'matched_threshold': 0.6,
+                'unmatched_threshold': 0.45
+            },
+        ]
+
+        TARGET_ASSIGNER_CONFIG:
+            NAME: AxisAlignedTargetAssigner
+            POS_FRACTION: -1.0
+            SAMPLE_SIZE: 512
+            NORM_BY_NUM_EXAMPLES: False
+            MATCH_HEIGHT: False
+            BOX_CODER: ResidualCoder
+
+        LOSS_CONFIG:
+            LOSS_WEIGHTS: {
+                'cls_weight': 1.0,
+                'loc_weight': 2.0,
+                'dir_weight': 0.2,
+                'code_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            }
+
+    ROI_HEAD:
+        NAME: SFDHead
+        CLASS_AGNOSTIC: True
+
+        ATTENTION_FC: [256]
+        SHARED_FC: [512,512]
+        
+        CLS_FC: [512, 512]
+        REG_FC: [512, 512]
+        DP_RATIO: 0.3
+
+        SHARED_FC_PSEUDO: [256, 256]
+        CLS_FC_PSEUDO: [256, 256]
+        REG_FC_PSEUDO: [256, 256]
+
+        SHARED_FC_VALID: [256, 256]
+        CLS_FC_VALID: [256, 256]
+        REG_FC_VALID: [256, 256]
+
+        AUXILIARY_CODE_SIZE: 7
+
+        NMS_CONFIG:
+            TRAIN:
+                NMS_TYPE: nms_gpu
+                MULTI_CLASSES_NMS: False
+                NMS_PRE_MAXSIZE: 9000
+                NMS_POST_MAXSIZE: 512
+                NMS_THRESH: 0.8
+            TEST:
+                NMS_TYPE: nms_gpu
+                MULTI_CLASSES_NMS: False
+                USE_FAST_NMS: True
+                SCORE_THRESH: 0.0
+                NMS_PRE_MAXSIZE: 2048
+                NMS_POST_MAXSIZE: 100
+                NMS_THRESH: 0.7
+
+        ROI_GRID_POOL:
+            FEATURES_SOURCE: ['x_conv3', 'x_conv4']
+            PRE_MLP: True
+            GRID_SIZE: 6
+            POOL_LAYERS:
+                x_conv3:
+                    MLPS: [[32, 32], [32, 32]]
+                    QUERY_RANGES: [[2, 2, 2], [4, 4, 4]]
+                    POOL_RADIUS: [0.4, 0.8]
+                    NSAMPLE: [16, 16]
+                    POOL_METHOD: max_pool
+                x_conv4:
+                    MLPS: [[32, 32], [32, 32]]
+                    QUERY_RANGES: [[2, 2, 2], [4, 4, 4]]
+                    POOL_RADIUS: [0.8, 1.6]
+                    NSAMPLE: [16, 16]
+                    POOL_METHOD: max_pool
+
+        ROI_POINT_CROP:
+            POOL_EXTRA_WIDTH: [0.2,0.2,0.6]
+            DEPTH_NORMALIZER: 70.0
+
+        ROI_AWARE_POOL:
+            POOL_SIZE: 12
+            NUM_FEATURES: 128
+            MAX_POINTS_PER_VOXEL: 64
+
+            NUM_FEATURES_RAW: 90
+            POOL_METHOD: max
+            KERNEL_TYPE: coords_5x5_dilate
+
+        TARGET_CONFIG:
+            BOX_CODER: ResidualCoder
+            ROI_PER_IMAGE: 128
+            FG_RATIO: 0.5
+
+            SAMPLE_ROI_BY_EACH_CLASS: True
+            CLS_SCORE_TYPE: roi_iou
+
+            CLS_FG_THRESH: 0.75
+            CLS_BG_THRESH: 0.25
+            CLS_BG_THRESH_LO: 0.1
+            HARD_BG_RATIO: 0.8
+
+            REG_FG_THRESH: 0.55
+
+        LOSS_CONFIG:
+            CLS_LOSS: BinaryCrossEntropy
+            REG_LOSS: giou
+            REG_LOSS_PSEUDO: smooth-l1
+            REG_LOSS_VALID: smooth-l1
+            CORNER_LOSS_REGULARIZATION: True
+            GRID_3D_IOU_LOSS: False
+            LOSS_WEIGHTS: {
+                'rcnn_cls_weight': 1.0,
+                'rcnn_reg_weight': 1.0,
+                'rcnn_corner_weight': 1.0,
+                'rcnn_iou3d_weight': 1.0,
+                'code_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            }
+            LOSS_WEIGHTS_PSEUDO: {
+                'rcnn_cls_weight': 0.5,
+                'rcnn_reg_weight': 0.5,
+                'code_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            }
+            LOSS_WEIGHTS_VALID: {
+                'rcnn_cls_weight': 0.5,
+                'rcnn_reg_weight': 0.5,
+                'code_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            }
+
+    POST_PROCESSING:
+        RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
+        SCORE_THRESH: 0.3
+        OUTPUT_RAW_SCORE: False
+
+        EVAL_METRIC: kitti
+
+        NMS_CONFIG:
+            MULTI_CLASSES_NMS: False
+            NMS_TYPE: nms_gpu
+            NMS_THRESH: 0.1
+            NMS_PRE_MAXSIZE: 4096
+            NMS_POST_MAXSIZE: 500
+
+OPTIMIZATION:
+    BATCH_SIZE_PER_GPU: 1
+    NUM_EPOCHS: 40
+
+    OPTIMIZER: adam_onecycle
+    LR: 0.01
+    WEIGHT_DECAY: 0.01
+    MOMENTUM: 0.9
+
+    MOMS: [0.95, 0.85]
+    PCT_START: 0.4
+    DIV_FACTOR: 10
+    DECAY_STEP_LIST: [15,25]
+    LR_DECAY: 0.1
+    LR_CLIP: 0.0000001
+
+    LR_WARMUP: False
+    WARMUP_EPOCH: 1
+
+    GRAD_NORM_CLIP: 10

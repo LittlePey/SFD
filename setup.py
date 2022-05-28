@@ -32,9 +32,9 @@ if __name__ == '__main__':
     write_version_to_file(version, 'pcdet/version.py')
 
     setup(
-        name='voxel-r-cnn',
+        name='sfd',
         version=version,
-        description='Voxel-R-CNN is the implementation of Voxel R-CNN in AAAI2021. This code is built on OpenPCDet',
+        description='SFD is the implementation of SFD in CVPR2022. This code is built on Voxel-R-CNN and OpenPCDet',
         install_requires=[
             'numpy',
             'torch>=1.1',

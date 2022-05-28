@@ -122,6 +122,110 @@ class DataProcessor(object):
         data_dict['points'] = points[choice]
         return data_dict
 
+    def mask_points_and_boxes_outside_range_sfd(self, data_dict=None, config=None):
+        if data_dict is None:
+            return partial(self.mask_points_and_boxes_outside_range_sfd, config=config)
+
+            
+        mask = common_utils.mask_points_by_range(data_dict['points'], self.point_cloud_range)
+        data_dict['points'] = data_dict['points'][mask]
+
+        mask = common_utils.mask_points_by_range(data_dict['points_pseudo'], self.point_cloud_range)
+        data_dict['points_pseudo'] = data_dict['points_pseudo'][mask]
+
+
+        if data_dict.get('gt_boxes', None) is not None and config.REMOVE_OUTSIDE_BOXES and self.training:
+            mask = box_utils.mask_boxes_outside_range_numpy(
+                data_dict['gt_boxes'], self.point_cloud_range, min_num_corners=config.get('min_num_corners', 1)
+            )
+            data_dict['gt_boxes'] = data_dict['gt_boxes'][mask]
+        return data_dict
+
+    def shuffle_points_sfd(self, data_dict=None, config=None):
+        if data_dict is None:
+            return partial(self.shuffle_points_sfd, config=config)
+
+        if config.SHUFFLE_ENABLED[self.mode]:
+            points = data_dict['points']
+            shuffle_idx = np.random.permutation(points.shape[0])
+            points = points[shuffle_idx]
+            data_dict['points'] = points
+
+            points_pseudo = data_dict['points_pseudo']
+            shuffle_idx = np.random.permutation(points_pseudo.shape[0])
+            points_pseudo = points_pseudo[shuffle_idx]
+            data_dict['points_pseudo'] = points_pseudo
+            
+        if config.get('USE_RAW_FEATURES', False):
+            data_dict['points_valid'] = data_dict['points']
+            data_dict['points'] = data_dict['points'][:,:4]
+
+        return data_dict
+
+    def transform_points_to_voxels_valid(self, data_dict=None, config=None, voxel_generator=None):
+        if data_dict is None:
+            try:
+                from spconv.utils import VoxelGeneratorV2 as VoxelGenerator
+            except:
+                from spconv.utils import VoxelGenerator
+            voxel_generator = VoxelGenerator(
+                voxel_size=config.VOXEL_SIZE,
+                point_cloud_range=self.point_cloud_range,
+                max_num_points=config.MAX_POINTS_PER_VOXEL,
+                max_voxels=config.MAX_NUMBER_OF_VOXELS[self.mode]
+            )
+            grid_size = (self.point_cloud_range[3:6] - self.point_cloud_range[0:3]) / np.array(config.VOXEL_SIZE)
+            self.grid_size = np.round(grid_size).astype(np.int64)
+            self.voxel_size = config.VOXEL_SIZE
+            self.max_voxels = config.MAX_NUMBER_OF_VOXELS[self.mode]
+            self.skip_voxel_generator = config.get('SKIP_VOXEL_GENERATOR', False)
+            return partial(self.transform_points_to_voxels_valid, voxel_generator=voxel_generator)
+
+        if self.skip_voxel_generator:
+            points = data_dict['points']
+            pc_range_min = np.array(self.point_cloud_range[:3]).reshape(-1, 3)
+            voxel_size_array = np.array(self.voxel_size).reshape(-1, 3)
+            keep = common_utils.mask_points_by_range_hard(points, self.point_cloud_range)
+            chosen_points = points[keep]
+            chosen_points = chosen_points[:self.max_voxels, :]
+            coords = (chosen_points[:, :3] - pc_range_min) // voxel_size_array
+            coords = coords.astype(int)
+            num_points = np.ones(chosen_points.shape[0])
+            data_dict['voxels'] = chosen_points
+            data_dict['voxel_coords'] = coords[:, [2, 1, 0]]
+            data_dict['voxel_num_points'] = num_points
+        else:
+            points = data_dict['points']
+            voxel_output = voxel_generator.generate(points)
+            if isinstance(voxel_output, dict):
+                voxels, coordinates, num_points = \
+                    voxel_output['voxels'], voxel_output['coordinates'], voxel_output['num_points_per_voxel']
+            else:
+                voxels, coordinates, num_points = voxel_output
+
+            if not data_dict['use_lead_xyz']:
+                voxels = voxels[..., 3:]  # remove xyz in voxels(N, 3)
+
+            data_dict['voxels'] = voxels
+            data_dict['voxel_coords'] = coordinates
+            data_dict['voxel_num_points'] = num_points
+        return data_dict
+
+    def grid_sample_points_pseudo(self, data_dict=None, config=None):
+        if data_dict is None:
+            return partial(self.grid_sample_points_pseudo, config=config)
+
+        max_distance = config.MAX_DISTANCE
+        points = data_dict['points_pseudo']
+        dist_mask = points[:,0] < max_distance
+        col_mask  = (points[:,6]%2 == 0) & dist_mask
+        row_mask  = (points[:,7]%2 == 0) & dist_mask
+
+        ignore_mask = col_mask | row_mask
+        sample_mask = ~ignore_mask
+        data_dict['points_pseudo'] = points[sample_mask]
+        return data_dict
+
     def forward(self, data_dict):
         """
         Args:

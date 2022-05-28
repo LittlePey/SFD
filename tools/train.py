@@ -24,7 +24,7 @@ def parse_config():
 
     parser.add_argument('--batch_size', type=int, default=None, required=False, help='batch size for training')
     parser.add_argument('--epochs', type=int, default=None, required=False, help='number of epochs to train for')
-    parser.add_argument('--workers', type=int, default=8, help='number of workers for dataloader')
+    parser.add_argument('--workers', type=int, default=4, help='number of workers for dataloader')
     parser.add_argument('--extra_tag', type=str, default='default', help='extra tag for this experiment')
     parser.add_argument('--ckpt', type=str, default=None, help='checkpoint to start from')
     parser.add_argument('--pretrained_model', type=str, default=None, help='pretrained_model')
@@ -34,10 +34,11 @@ def parse_config():
     parser.add_argument('--fix_random_seed', action='store_true', default=False, help='')
     parser.add_argument('--ckpt_save_interval', type=int, default=1, help='number of training epochs')
     parser.add_argument('--local_rank', type=int, default=0, help='local rank for distributed training')
-    parser.add_argument('--max_ckpt_save_num', type=int, default=30, help='max number of saved checkpoint')
+    parser.add_argument('--max_ckpt_save_num', type=int, default=10, help='max number of saved checkpoint')
     parser.add_argument('--merge_all_iters_to_one_epoch', action='store_true', default=False, help='')
     parser.add_argument('--set', dest='set_cfgs', default=None, nargs=argparse.REMAINDER,
                         help='set extra config keys if needed')
+    parser.add_argument('--gpu_id', type=str, default='default', help='gpu ids')
 
     parser.add_argument('--max_waiting_mins', type=int, default=0, help='max waiting minutes')
     parser.add_argument('--start_epoch', type=int, default=0, help='')
@@ -57,6 +58,7 @@ def parse_config():
 
 def main():
     args, cfg = parse_config()
+    os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu_id
     if args.launcher == 'none':
         dist_train = False
         total_gpus = 1

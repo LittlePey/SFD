@@ -5,6 +5,7 @@ from .pointpillar import PointPillar
 from .pv_rcnn import PVRCNN
 from .second_net import SECONDNet
 from .voxel_rcnn import VoxelRCNN
+from .sfd import SFD
 
 __all__ = {
     'Detector3DTemplate': Detector3DTemplate,
@@ -13,7 +14,8 @@ __all__ = {
     'PVRCNN': PVRCNN,
     'PointPillar': PointPillar,
     'PointRCNN': PointRCNN,
-    'VoxelRCNN': VoxelRCNN
+    'VoxelRCNN': VoxelRCNN,
+    'SFD': SFD
 }
 
 

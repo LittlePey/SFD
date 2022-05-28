@@ -30,6 +30,7 @@ def parse_config():
     parser.add_argument('--local_rank', type=int, default=0, help='local rank for distributed training')
     parser.add_argument('--set', dest='set_cfgs', default=None, nargs=argparse.REMAINDER,
                         help='set extra config keys if needed')
+    parser.add_argument('--gpu_id', type=str, default='default', help='gpu ids')
 
     parser.add_argument('--max_waiting_mins', type=int, default=30, help='max waiting minutes')
     parser.add_argument('--start_epoch', type=int, default=0, help='')
@@ -133,6 +134,7 @@ def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir
 
 def main():
     args, cfg = parse_config()
+    os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu_id
     if args.launcher == 'none':
         dist_test = False
         total_gpus = 1
