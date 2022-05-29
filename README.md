@@ -50,6 +50,7 @@ This is the official implementation of [**Sparse Fuse Dense: Towards High Qualit
     ├── pcdet
     ├── tools
     ```
+    Each pseudo point in depth_pseudo_rgbseguv_twise has 9 attributes (x, y, z, r, g, b, seg, u, v). It should be noted that we do not use the seg attribute, because the image segmentation results cannot bring improvement to SFD in our experiments.
 
 3. Setup.
 
